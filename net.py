@@ -29,11 +29,11 @@ class UNetGenerator(chainer.Chain):
             ]
             self.encoder_layer_specs = layer_specs
             self.encoder_num_layers = len(layer_specs) + 2
-            for i, out_channels in enumerate(layer_specs):
-                cname = "conv%n" % (i + 2)
-                self[cname] = L.Convolution2D(None, out_channels, ksize=3, stride=2, pad=1)
-                bnname = "encbn%n" % (i + 2)
-                self[bnname] = L.BatchNormalization()
+            for i, out_channels  in enumerate(layer_specs):
+                cname = "conv%d" % (i + 2)
+                setattr(self, cname, L.Convolution2D(None, out_channels, ksize=3, stride=2, pad=1))
+                bnname = "encbn%d" % (i + 2)
+                setattr(self, bnname, L.BatchNormalization(out_channels))
 
             layer_specs = [
                 (ngf * 8, 0.5),
@@ -46,13 +46,13 @@ class UNetGenerator(chainer.Chain):
             ]
             self.decoder_layer_specs = layer_specs
             self.decoder_num_layers = len(layer_specs) + 2
-            for i in enumerate(range(self.decoder_num_layers, 1, -1)):
-                cname = "deconv%n" % i
-                bnname = "decbn%n" % i
+            for i in range(self.decoder_num_layers, 1, -1):
+                cname = "deconv%d" % i
+                bnname = "decbn%d" % i
                 out_channels, _ = layer_specs[self.decoder_num_layers - i - 2]
-                self[cname] = L.Deconvolution2D(None, out_channels, ksize=2, stride=2, pad=1)
-                self[bnname] = L.BatchNormalization()
-            self.deconv1 = L.Deconvolution2D(nfg, self.ch, ksize=2, stride=2, pad=1)
+                setattr(self, cname, L.Deconvolution2D(None, out_channels, ksize=2, stride=2, pad=1))
+                setattr(self, bnname, L.BatchNormalization(out_channels))
+            self.deconv1 = L.Deconvolution2D(ngf, self.ch, ksize=2, stride=2, pad=1)
 
     def predict(self, x):
         input = x
@@ -83,4 +83,6 @@ class UNetGenerator(chainer.Chain):
         output = F.tanh(h)
 
         return output
-            
+
+if __name__ == "__main__":
+    net = UNetGenerator(32)
