@@ -10,7 +10,8 @@ from chainer.dataset import dataset_mixin
 
 class Pix2pixDataset(dataset_mixin.DatasetMixin):
     def __init__(self, datadir):
-        self.pos = -1
+        self.pos = 0
+        self.epoch = 0
         self.datadir = datadir
         files = []
         for fname in os.listdir(datadir):
@@ -44,12 +45,13 @@ class Pix2pixDataset(dataset_mixin.DatasetMixin):
         b_img = img[:, :, w:w*2]
         return a_img, b_img
 
-    def __next__(self):
+    def next(self):
+        ret = self.get_example(self.pos)
         self.pos += 1
-        return self.get_example(self.pos)
+        return ret
 
     def reset(self):
-        self.pos = -1
+        self.pos = 0
 
 class Pix2pixIterator(chainer.dataset.Iterator):
     def __init__(self, dataset, batchsize):
