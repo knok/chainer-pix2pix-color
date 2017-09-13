@@ -85,7 +85,6 @@ class UNetGenerator(chainer.Chain):
         for i in range(1, 8):
             h = self['c%d'%i](hs[-1])
             hs.append(h)
-            print(h.shape)
         h = self.d0(hs[-1])
         for i in range(1, 8):
             h = F.concat([h, hs[-i-1]])
@@ -102,40 +101,33 @@ class UNetGenerator(chainer.Chain):
 class P2PDiscriminator(chainer.Chain):
     def __init__(self, ndf, **kwargs):
         super(P2PDiscriminator, self).__init__(**kwargs)
+        self.ch = 3
         self.ndf = ndf
         self.n_layers = 3
-        self.layers = []
+        layers = {}
         with self.init_scope():
-            self.conv1 = L.Convolution2D(None, ndf, stride=2)
-            for i in range(self.n_layers):
-                idx = i + 2
-                cname = "conv%d" % idx
-                out_channels = ndf * min(2 ** (i+1), 8)
-                stride = 1 if i == (self.n_layers+2) else 2 # stride=1 on the last layer
-                setattr(self, cname, L.Convolution2D(None, out_channels, stride=stride))
-                bnname = "bn%d" % idx
-                setattr(self, bnname, L.BatchNormalization(out_channels))
-            idx = self.n_layers + 2
-            cname = "conv%d" % idx
-            setattr(self, cname, L.Convolution2D(None, 1, stride=1))
+            layers['c0_0'] = CBR(self.ch, self.ndf, bn=False, sample='down',
+                                 activation=F.leaky_relu, dropout=False)
+            layers['c0_1'] = CBR(self.ch, self.ndf, bn=False, sample='down',
+                                 activation=F.leaky_relu, dropout=False)
+            layers['c1'] = CBR(self.ndf*2, self.ndf*4, bn=False, sample='down',
+                                 activation=F.leaky_relu, dropout=False)
+            layers['c2'] = CBR(self.ndf*4, self.ndf*8, bn=False, sample='down',
+                                 activation=F.leaky_relu, dropout=False)
+            layers['c3'] = CBR(self.ndf*8, self.ndf*16, bn=False, sample='down',
+                                 activation=F.leaky_relu, dropout=False)
+            w = chainer.initializers.Normal(0.02)
+            layers['c4'] = L.Convolution2D(self.ndf*16, 1, 3, 1, 1, initialW=w)
+            for k, v in layers.items():
+                setattr(self, k, v)
 
     def __call__(self, x0, x1):
-        h = F.concat([x0, x1])
-        h = self.conv1(h)
-        input = F.leaky_relu(h)
-        for i in range(self.n_layers):
-            idx = i + 2
-            cname = "conv%d" % idx
-            bnname = "bn%d" % idx
-            h = self[cname](input)
-            h = self[bnname](h)
-            output = F.leaky_relu(h)
-            input = output
-        idx = self.n_layers + 2
-        cname = "conv%d" % idx
-        h = self[cname](input)
+        h = F.concat([self.c0_0(x0), self.c0_1(x1)])
+        h = self.c1(h)
+        h = self.c2(h)
+        h = self.c3(h)
+        h = self.c4(h)
         output = F.sigmoid(h)
-
         return output
 
 if __name__ == "__main__":
