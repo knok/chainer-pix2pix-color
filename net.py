@@ -104,8 +104,9 @@ class P2PDiscriminator(chainer.Chain):
             cname = "conv%d" % idx
             setattr(self, cname, L.Convolution2D(None, 1, stride=1))
 
-    def __call__(self, x):
-        h = self.conv1(x)
+    def __call__(self, x0, x1):
+        h = F.concat([x0, x1])
+        h = self.conv1(h)
         input = F.leaky_relu(h)
         for i in range(self.n_layers):
             idx = i + 2
