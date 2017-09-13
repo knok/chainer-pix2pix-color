@@ -17,7 +17,7 @@ class UNetGenerator(chainer.Chain):
 
         with self.init_scope():
             # conv1 [batch, ch, 256, 256] -> [batch, ngf, 128, 128]
-            self.conv1 = L.Convolution2D(self.ch, self.ngf, stride=2)
+            self.conv1 = L.Convolution2D(self.ch, self.ngf, 3, 1, 1)
             layer_specs = [
                 ngf * 2, # conv2 [batch, ngf*2, 64, 64]
                 ngf * 4, # conv3 [batch, ngf*4, 32, 32]
@@ -31,7 +31,7 @@ class UNetGenerator(chainer.Chain):
             self.encoder_num_layers = len(layer_specs) + 2
             for i, out_channels  in enumerate(layer_specs):
                 cname = "conv%d" % (i + 2)
-                setattr(self, cname, L.Convolution2D(None, out_channels, ksize=3, stride=2))
+                setattr(self, cname, L.Convolution2D(None, out_channels, 4, 2, 1))
                 bnname = "encbn%d" % (i + 2)
                 setattr(self, bnname, L.BatchNormalization(out_channels))
 
@@ -50,9 +50,9 @@ class UNetGenerator(chainer.Chain):
                 cname = "deconv%d" % i
                 bnname = "decbn%d" % i
                 out_channels, _ = layer_specs[self.decoder_num_layers - i - 2]
-                setattr(self, cname, L.Deconvolution2D(None, out_channels, ksize=2, stride=2))
+                setattr(self, cname, L.Deconvolution2D(None, out_channels, 4, 2, 1))
                 setattr(self, bnname, L.BatchNormalization(out_channels))
-            self.deconv1 = L.Deconvolution2D(ngf, self.ch, ksize=2, stride=2)
+            self.deconv1 = L.Deconvolution2D(ngf, self.ch, 3, 1, 1)
 
     def predict(self, x):
         input = x
@@ -66,11 +66,13 @@ class UNetGenerator(chainer.Chain):
             output = self[bnname](h)
             layers.append(output)
         input = output
-        for i in range(8, 1, -1):
+        for i in range(self.decoder_num_layers, 1, -1):
             idx = i - 2
             dcname = "deconv%d" % idx
             bnname = "decbn%d" % idx
             ngf, dropout = self.decoder_layer_specs[idx]
+            print(dcname, i, idx, layers[idx].shape, input.shape)
+            import pdb; pdb.set_trace()
             input = F.concat([layers[idx], input])
             ref = F.relu(input)
             h = self[dcname](ref)
