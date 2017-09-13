@@ -5,10 +5,12 @@ import os
 import numpy as np
 from PIL import Image
 
-from chainer.dataset import DatasetMixin
+import chainer
+from chainer.dataset import dataset_mixin
 
-class Pix2pixDataset(DatasetMixin):
+class Pix2pixDataset(dataset_mixin.DatasetMixin):
     def __init__(self, datadir):
+        self.pos = -1
         self.datadir = datadir
         files = []
         for fname in os.listdir(datadir):
@@ -31,6 +33,8 @@ class Pix2pixDataset(DatasetMixin):
 
     # return (A image, B image)
     def get_example(self, i):
+        if i > len(self):
+            raise IndexError("index too large")
         img = self.load_image(i)
         ch, h, w = img.shape
         w = w // 2
@@ -40,8 +44,48 @@ class Pix2pixDataset(DatasetMixin):
         b_img = img[:, :, w:w*2]
         return a_img, b_img
 
+    def __next__(self):
+        self.pos += 1
+        return self.get_example(self.pos)
+
+    def reset(self):
+        self.pos = -1
+
+class Pix2pixIterator(chainer.dataset.Iterator):
+    def __init__(self, dataset, batchsize):
+        self.dataset = dataset
+        self.batchsize = batchsize
+        self.pos = 0
+        self.epoch = 0
+
+    def fetch(self):
+        data = []
+        try:
+            for i in range(self.batchsize):
+                data.append(self.dataset.next())
+            self.pos += self.batchsize
+        except:
+            self.pos = 0
+            self.epoch += 1
+            self.dataset.reset()
+        return data
+
+    def __next__(self):
+        data = self.fetch()
+        if len(data) <= 0:
+            data.self.fetch()
+        data = np.asarray(data)
+        return data
+
+    @property
+    def epoch_detail(self):
+        ed = self.epoch + float(self.pos / len(self.dataset))
+        return ed
+
 if __name__ == '__main__':
     try:
         x = Pix2pixDataset(".")
     except FileNotFoundError as e:
         print(e)
+    #x = Pix2pixDataset("/path/to/data")
+    #y = Pix2pixIterator(x, 1)
