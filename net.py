@@ -84,5 +84,44 @@ class UNetGenerator(chainer.Chain):
 
         return output
 
+class P2PDiscriminator(chainer.Chain):
+    def __init__(self, ndf, **kwargs):
+        super(P2PDiscriminator, self).__init__(**kwargs)
+        self.ndf = ndf
+        self.n_layers = 3
+        self.layers = []
+        with self.init_scope():
+            self.conv1 = L.Convolution2D(None, ndf, stride=2)
+            for i in range(self.n_layers):
+                idx = i + 2
+                cname = "conv%d" % idx
+                out_channels = ndf * min(2 ** (i+1), 8)
+                stride = 1 if i == (self.n_layers+2) else 2 # stride=1 on the last layer
+                setattr(self, cname, L.Convolution2D(None, out_channels, stride=stride))
+                bnname = "bn%d" % idx
+                setattr(self, bnname, L.BatchNormalization(out_channels))
+            idx = self.n_layers + 2
+            cname = "conv%d" % idx
+            setattr(self, cname, L.Convolution2D(None, 1, stride=1))
+
+    def __call__(self, x):
+        h = self.conv1(x)
+        input = F.leaky_relu(h)
+        for i in range(self.n_layers):
+            idx = i + 2
+            cname = "conv%d" % idx
+            bnname = "bn%d" % idx
+            h = self[cname](input)
+            h = self[bnname](h)
+            output = F.leaky_relu(h)
+            input = output
+        idx = self.n_layers + 2
+        cname = "conv%d" % idx
+        h = self[cname](input)
+        output = F.sigmoid(h)
+
+        return output
+
 if __name__ == "__main__":
     net = UNetGenerator(32)
+    disc = P2PDiscriminator(32)
