@@ -6,6 +6,8 @@ import numpy as np
 import argparse
 import chainer
 from chainer.training import extensions
+import chainer.functions as F
+import chainer.links as L
 
 from data import Pix2pixDataset, Pix2pixIterator
 from net import UNetGenerator, P2PDiscriminator
@@ -27,7 +29,7 @@ class Pix2pixUpdater(chainer.training.StandardUpdater):
         batchsize, _, w, h = y_in.data.shape
 
         L1 = F.sum(F.softplus(-y_in)) / batchsize / w / h
-        L2 = F.sum(F.softplus(yout)) / batchsize / w / h
+        L2 = F.sum(F.softplus(y_out)) / batchsize / w / h
         loss = L1 + L2
         chainer.report({'loss': loss}, dis)
         return loss
