@@ -31,7 +31,7 @@ class UNetGenerator(chainer.Chain):
             self.encoder_num_layers = len(layer_specs) + 2
             for i, out_channels  in enumerate(layer_specs):
                 cname = "conv%d" % (i + 2)
-                setattr(self, cname, L.Convolution2D(None, out_channels, ksize=3, stride=2, pad=1))
+                setattr(self, cname, L.Convolution2D(None, out_channels, ksize=3, stride=2))
                 bnname = "encbn%d" % (i + 2)
                 setattr(self, bnname, L.BatchNormalization(out_channels))
 
@@ -50,9 +50,9 @@ class UNetGenerator(chainer.Chain):
                 cname = "deconv%d" % i
                 bnname = "decbn%d" % i
                 out_channels, _ = layer_specs[self.decoder_num_layers - i - 2]
-                setattr(self, cname, L.Deconvolution2D(None, out_channels, ksize=2, stride=2, pad=1))
+                setattr(self, cname, L.Deconvolution2D(None, out_channels, ksize=2, stride=2))
                 setattr(self, bnname, L.BatchNormalization(out_channels))
-            self.deconv1 = L.Deconvolution2D(ngf, self.ch, ksize=2, stride=2, pad=1)
+            self.deconv1 = L.Deconvolution2D(ngf, self.ch, ksize=2, stride=2)
 
     def predict(self, x):
         input = x
