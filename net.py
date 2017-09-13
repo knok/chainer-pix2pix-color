@@ -59,8 +59,8 @@ class UNetGenerator(chainer.Chain):
         layers = []
         output = self.conv1(input)
         for i in range(2, self.encoder_num_layers):
-            cname = "conv%n" % i
-            bnname = "encbn%n" % i
+            cname = "conv%d" % i
+            bnname = "encbn%d" % i
             ref = F.leaky_relu(output, 0.2)
             h = self[cname](ref)
             output = self[bnname](h)
@@ -68,9 +68,9 @@ class UNetGenerator(chainer.Chain):
         input = output
         for i in range(8, 1, -1):
             idx = i - 2
-            dcname = "deconv%n" % idx
-            bnname = "decbn%n" % idx
-            ngf, dropout = self.decoder_layer_spec[idx]
+            dcname = "deconv%d" % idx
+            bnname = "decbn%d" % idx
+            ngf, dropout = self.decoder_layer_specs[idx]
             input = F.concat([layers[idx], input])
             ref = F.relu(input)
             h = self[dcname](ref)
