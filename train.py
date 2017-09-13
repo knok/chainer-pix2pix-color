@@ -86,14 +86,14 @@ def main():
     gen = UNetGenerator(args.ngf)
     dis = P2PDiscriminator(args.ndf)
     train_data = Pix2pixDataset(args.input_dir)
-    train_iter = Pix2pixIterator(train_data, args.batchsize)
+    train_iter = chainer.iterators.SerialIterator(train_data, args.batchsize)
     opt_gen = chainer.optimizers.Adam(alpha=args.lr, beta1=args.beta1)
     opt_gen.setup(gen)
     opt_dis = chainer.optimizers.Adam(alpha=args.lr, beta1=args.beta1)
     opt_dis.setup(dis)
 
     updater = Pix2pixUpdater(models=(gen, dis),
-                             iterator={'main': train_data},
+                             iterator={'main': train_iter},
                              optimizer={'gen': opt_gen,
                                         'dis': opt_dis},
                              device=args.gpu)
