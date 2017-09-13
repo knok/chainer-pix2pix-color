@@ -64,6 +64,8 @@ class Pix2pixUpdater(chainer.training.StandardUpdater):
         x_in.unchain_backward()
         x_out.unchain_backward()
         dis_opt.update(self.loss_dis, dis, y_real, y_fake)
+        y_real.unchain_backward()
+        y_fake.unchain_backward()
 
 def get_args():
     parser = argparse.ArgumentParser()
