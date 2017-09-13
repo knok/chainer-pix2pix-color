@@ -22,7 +22,8 @@ class Pix2pixDataset(DatasetMixin):
         return len(self.files)
 
     def load_image(self, i):
-        img = Image.load(self.files[i])
+        path = os.path.join(self.datadir, self.files[i])
+        img = Image.open(path)
         img = np.asarray(img, dtype=np.float32)
         img = img.transpose(2, 0, 1)
         img /= 255.0
@@ -31,13 +32,12 @@ class Pix2pixDataset(DatasetMixin):
     # return (A image, B image)
     def get_example(self, i):
         img = self.load_image(i)
-        ch, w, h = img.shape
+        ch, h, w = img.shape
         w = w // 2
-        h = h // 2
-        a_img = np.zeros((ch, w, h), dtype=np.float32)
-        b_img = np.zeros((ch, w, h), dtype=np.float32)
-        a_img = img[:, 0:w, 0:h]
-        b_img = img[:, w:w*2, h:h*2]
+        a_img = np.zeros((ch, h, w), dtype=np.float32)
+        b_img = np.zeros((ch, h, w), dtype=np.float32)
+        a_img = img[:, :, 0:w]
+        b_img = img[:, :, w:w*2]
         return a_img, b_img
 
 if __name__ == '__main__':
