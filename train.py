@@ -5,8 +5,9 @@ import os
 import numpy as np
 import argparse
 import chainer
+from chainer.training import extensions
 
-from data import Pix2pixDataset
+from data import Pix2pixDataset, Pix2pixIterator
 from net import UNetGenerator, P2PDiscriminator
 
 class Pix2pixUpdater(chainer.training.StandardUpdater):
@@ -45,7 +46,7 @@ class Pix2pixUpdater(chainer.training.StandardUpdater):
         w_out = 256
 
         x_in = xp.zeros((batchsize, in_ch, w_in, w_in)).astype('f')
-        y_out = xp.zeros((batchsize, out_ch, w_in, w_in)).astype('f')
+        t_out = xp.zeros((batchsize, out_ch, w_in, w_in)).astype('f')
 
         for i in range(batchsize):
             x_in[i, :] = xp.asarray(batch[i][0])
@@ -72,6 +73,10 @@ def get_args():
     parser.add_argument("--ndf", type=int, default=64)
     parser.add_argument("--lr", type=float, default=0.0002)
     parser.add_argument("--beta1", type=float, default=0.5)
+    
+    parser.add_argument("--epoch", '-e', type=int, default=200)
+    parser.add_argument("--snapshot-interval", type=int, default=1000)
+    parser.add_argument("--display-interval", type=int, default=100)
     args = parser.parse_args()
     return args
 
@@ -81,7 +86,7 @@ def main():
     gen = UNetGenerator(args.ngf)
     dis = P2PDiscriminator(args.ndf)
     train_data = Pix2pixDataset(args.input_dir)
-    train_iter = chainer.iterators.SerialIterator(train_data, args.batchsize)
+    train_iter = Pix2pixIterator(train_data, args.batchsize)
     opt_gen = chainer.optimizers.Adam(alpha=args.lr, beta1=args.beta1)
     opt_gen.setup(gen)
     opt_dis = chainer.optimizers.Adam(alpha=args.lr, beta1=args.beta1)
@@ -92,6 +97,24 @@ def main():
                              optimizer={'gen': opt_gen,
                                         'dis': opt_dis},
                              device=args.gpu)
+
+    trainer = chainer.training.Trainer(updater, (args.epoch, 'epoch'), out=args.output_dir)
+
+    snapshot_interval = (args.snapshot_interval, 'iteration')
+    display_interval = (args.display_interval, 'iteration')
+    trainer.extend(extensions.snapshot(
+        filename="snapshot_iter_{.updater.iteration}.npz"),
+                   trigger=snapshot_interval)
+    trainer.extend(extensions.snapshot_object(
+        gen, 'gen_iter_{.updater.iteration}.npz'), trigger=snapshot_interval)
+    trainer.extend(extensions.LogReport(trigger=display_interval))
+    trainer.extend(extensions.PrintReport([
+        'epoch', 'iteration', 'gen/loss', 'dis/loss']), trigger=display_interval)
+    trainer.extend(extensions.ProgressBar(update_interval=10))
+
+    # TODO: implement resume
+
+    trainer.run()
 
 if __name__ == '__main__':
     main()
