@@ -84,6 +84,9 @@ class UNetGenerator(chainer.Chain):
 
         return output
 
+    def __call__(self, x):
+        return self.predict(x)
+
 class P2PDiscriminator(chainer.Chain):
     def __init__(self, ndf, **kwargs):
         super(P2PDiscriminator, self).__init__(**kwargs)
