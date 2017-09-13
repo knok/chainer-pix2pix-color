@@ -6,6 +6,31 @@ import chainer.functions as F
 import chainer.links as L
 from chainer import reporter
 
+class CBR(chainer.Chain):
+    def __init__(self, ch0, ch1, bn=True, sample="down", activation=F.relu, dropout=False):
+        self.bn = bn
+        self.activation = activation
+        self.dropout = dropout
+        layers = {}
+        w = chainer.initializers.Normal(0.02)
+        if sample=='down':
+            layers['c'] = L.Convolution2D(ch0, ch1, 4, 2, 1, initialW=w)
+        else:
+            layers['c'] = L.Deconvolution2D(ch0, ch1, 4, 2, 1, initialW=w)
+        if bn:
+            layers['batchnorm'] = L.BatchNormalization(ch1)
+        super(CBR, self).__init__(**layers)
+
+    def __call__(self, x):
+        h = self.c(x)
+        if self.bn:
+            h = self.batchnorm(h)
+        if self.dropout:
+            h = F.dropout(h)
+        if not self.activation is None:
+            h = self.activation(h)
+        return h
+
 class UNetGenerator(chainer.Chain):
 
     def __init__(self, ngf, **kwargs):
@@ -14,76 +39,61 @@ class UNetGenerator(chainer.Chain):
         self.width = 256
         self.height = 256
         super(UNetGenerator, self).__init__(**kwargs)
-
+        
         with self.init_scope():
+            layers = {}
             # conv1 [batch, ch, 256, 256] -> [batch, ngf, 128, 128]
-            self.conv1 = L.Convolution2D(self.ch, self.ngf, 3, 1, 1)
-            layer_specs = [
-                ngf * 2, # conv2 [batch, ngf*2, 64, 64]
-                ngf * 4, # conv3 [batch, ngf*4, 32, 32]
-                ngf * 8, # conv4 [batch, ngf*8, 16, 16]
-                ngf * 8, # conv5 [batch, ngf*8, 8, 8]
-                ngf * 8, # conv6 [batch, ngf*8, 4, 4]
-                ngf * 8, # conv7 [batch, ngf*8, 2, 2]
-                ngf * 8, # conv8 [batch, ngf*8, 1, 1]
-            ]
-            self.encoder_layer_specs = layer_specs
-            self.encoder_num_layers = len(layer_specs) + 2
-            for i, out_channels  in enumerate(layer_specs):
-                cname = "conv%d" % (i + 2)
-                setattr(self, cname, L.Convolution2D(None, out_channels, 4, 2, 1))
-                bnname = "encbn%d" % (i + 2)
-                setattr(self, bnname, L.BatchNormalization(out_channels))
-
-            layer_specs = [
-                (ngf * 8, 0.5),
-                (ngf * 8, 0.5),
-                (ngf * 8, 0.5),
-                (ngf * 8, 0.0),
-                (ngf * 4, 0.0),
-                (ngf * 2, 0.0),
-                (ngf, 0.0),
-            ]
-            self.decoder_layer_specs = layer_specs
-            self.decoder_num_layers = len(layer_specs) + 2
-            for i in range(self.decoder_num_layers, 1, -1):
-                cname = "deconv%d" % i
-                bnname = "decbn%d" % i
-                out_channels, _ = layer_specs[self.decoder_num_layers - i - 2]
-                setattr(self, cname, L.Deconvolution2D(None, out_channels, 4, 2, 1))
-                setattr(self, bnname, L.BatchNormalization(out_channels))
-            self.deconv1 = L.Deconvolution2D(ngf, self.ch, 3, 1, 1)
+            layers['c0'] = L.Convolution2D(self.ch, self.ngf, 3, 1, 1)
+            layers['c1'] = CBR(self.ngf, self.ngf*2, bn=True, sample="down",
+                               activation=F.leaky_relu, dropout=False)
+            layers['c2'] = CBR(self.ngf*2, self.ngf*4, bn=True, sample="down",
+                               activation=F.leaky_relu, dropout=False)
+            layers['c3'] = CBR(self.ngf*4, self.ngf*8, bn=True, sample="down",
+                               activation=F.leaky_relu, dropout=False)
+            layers['c4'] = CBR(self.ngf*8, self.ngf*8, bn=True, sample="down",
+                               activation=F.leaky_relu, dropout=False)
+            layers['c5'] = CBR(self.ngf*8, self.ngf*8, bn=True, sample="down",
+                               activation=F.leaky_relu, dropout=False)
+            layers['c6'] = CBR(self.ngf*8, self.ngf*8, bn=True, sample="down",
+                               activation=F.leaky_relu, dropout=False)
+            layers['c7'] = CBR(self.ngf*8, self.ngf*8, bn=True, sample="down",
+                                activation=F.leaky_relu, dropout=False)
+            #
+            # Decoder
+            layers['d0'] = CBR(self.ngf*8, self.ngf*8, bn=True, sample="up",
+                               activation=F.relu, dropout=True)
+            layers['d1'] = CBR(self.ngf*8*2, self.ngf*8, bn=True, sample="up",
+                               activation=F.relu, dropout=True)
+            layers['d2'] = CBR(self.ngf*8*2, self.ngf*8, bn=True, sample="up",
+                               activation=F.relu, dropout=True)
+            layers['d3'] = CBR(self.ngf*8*2, self.ngf*8, bn=True, sample="up",
+                               activation=F.relu, dropout=False)
+            layers['d4'] = CBR(self.ngf*8*2, self.ngf*4, bn=True, sample="up",
+                               activation=F.relu, dropout=False)
+            layers['d5'] = CBR(self.ngf*8, self.ngf*2, bn=True, sample="up",
+                               activation=F.relu, dropout=False)
+            layers['d6'] = CBR(self.ngf*4, self.ngf, bn=True, sample="up",
+                               activation=F.relu, dropout=False)
+            w = chainer.initializers.Normal(0.02)
+            layers['d7'] = L.Convolution2D(self.ngf*2, self.ch, 3, 1, 1, initialW=w)
+            for k, v in layers.items():
+                setattr(self, k, v)
 
     def predict(self, x):
         input = x
-        layers = []
-        output = self.conv1(input)
-        for i in range(2, self.encoder_num_layers):
-            cname = "conv%d" % i
-            bnname = "encbn%d" % i
-            ref = F.leaky_relu(output, 0.2)
-            h = self[cname](ref)
-            output = self[bnname](h)
-            layers.append(output)
-        input = output
-        for i in range(self.decoder_num_layers, 1, -1):
-            idx = i - 2
-            dcname = "deconv%d" % idx
-            bnname = "decbn%d" % idx
-            ngf, dropout = self.decoder_layer_specs[idx]
-            print(dcname, i, idx, layers[idx].shape, input.shape)
-            import pdb; pdb.set_trace()
-            input = F.concat([layers[idx], input])
-            ref = F.relu(input)
-            h = self[dcname](ref)
-            output = self[bnname](h)
-            if dropout > 0.0:
-                output = F.dropout(output, dropout)
-        input = F.concat([output, layers[-1]])
-        ref = F.relu(input)
-        h = self.deconv1(ref)
+        hs = [F.leaky_relu(self.c0(input))]
+        for i in range(1, 8):
+            h = self['c%d'%i](hs[-1])
+            hs.append(h)
+            print(h.shape)
+        h = self.d0(hs[-1])
+        for i in range(1, 8):
+            h = F.concat([h, hs[-i-1]])
+            if i < 7:
+                h = self['d%d'%i](h)
+            else:
+                h = self.d7(h)
         output = F.tanh(h)
-
         return output
 
     def __call__(self, x):
